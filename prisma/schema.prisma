@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Client {
+  id              String            @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  notes           String?
+  status          ClientStatus      @default(ACTIVE)
+
+  // Supabase Auth user ID assigned to this client (for workers/clients)
+  assignedUserIds String[]          @default([])
+
+  // Google Sheet URL where leads are stored for this client
+  googleSheetUrl  String?
+
+  workflows       ClientWorkflow[]
+  payments        Payment[]
+
+  // Billing
+  monthlyAmount   Float?
+  nextPaymentDate DateTime?
+  paymentMethod   String?
+
+  totalLeads      Int               @default(0)
+  leadsThisMonth  Int               @default(0)
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+enum ClientStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+model ClientWorkflow {
+  id              String          @id @default(cuid())
+  clientId        String
+  client          Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  displayName     String
+  n8nWorkflowId   String?         @unique
+  active          Boolean         @default(false)
+  notes           String?
+
+  // Config fields (all optional — workflows without config leave these null)
+  nichos            String?
+  regiones          String?
+  pais              String?
+  producto          String?
+  propuestaValor    String?
+  googleSheetUrl    String?
+  googleSheetId     String?
+  maxResultados     Int?
+  intervaloMinutos  Int?
+
+  executions      Execution[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Execution {
+  id                  String          @id @default(cuid())
+  clientWorkflowId    String
+  clientWorkflow      ClientWorkflow  @relation(fields: [clientWorkflowId], references: [id], onDelete: Cascade)
+
+  n8nExecutionId      String?
+  status              ExecutionStatus
+  startedAt           DateTime
+  finishedAt          DateTime?
+
+  leadsFound          Int             @default(0)
+  emailsExtracted     Int             @default(0)
+  errorMessage        String?
+
+  createdAt           DateTime        @default(now())
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  clientId    String
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  amount      Float
+  date        DateTime
+  method      String?
+  notes       String?
+  status      PaymentStatus @default(PAID)
+
+  createdAt   DateTime      @default(now())
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  OVERDUE
+  CANCELLED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+}
+
+enum NotificationType {
+  PAYMENT_DUE
+  PAYMENT_OVERDUE
+  WORKFLOW_ERROR
+  WORKFLOW_SUCCESS
+  INFO
+}
+
+enum ExecutionStatus {
+  SUCCESS
+  ERROR
+  RUNNING
+  WAITING
+}
